@@ -1,0 +1,44 @@
+{
+    "baseStation": {
+        "lat": 33.8958,
+        "long": 130.8750
+    },
+    "satellites": {
+        "KITSUNE": {
+            "name": "KITSUNE",
+            "shortname": "KTN",
+            "operationType": "",
+            "minElevation": 10,
+            "operatorsFileName": "operators_list_empty.csv",
+            "mailDescription": "This tracks KITSUNE.",
+            "operators": [
+                {"email": "email@example.com"}
+            ],
+            "calendar_id": "REPLACE_WITH_GOOGLE_CALENDAR_ID@group.calendar.google.com"
+        },
+        "1998-067UN": {
+            "name": "BIRDS5",
+            "shortname": "BD5",
+            "operationType": "",
+            "minElevation": 10,
+            "operatorsFileName": "operators_list_empty.csv",
+            "mailDescription": "This tracks BIRDS-5.",
+            "operators": [
+                {"email": "email@example.com"}
+            ],
+            "calendar_id": "REPLACE_WITH_GOOGLE_CALENDAR_ID@group.calendar.google.com"
+        },
+        "FUTABA": {
+            "name": "FUTABA",
+            "shortname": "FTB",
+            "operationType": "",
+            "minElevation": 10,
+            "operatorsFileName": "operators_list_empty.csv",
+            "mailDescription": "This tracks Futaba.",
+            "operators": [
+                {"email": "email@example.com"}
+            ],
+            "calendar_id": "REPLACE_WITH_GOOGLE_CALENDAR_ID@group.calendar.google.com"
+        }
+    }
+}

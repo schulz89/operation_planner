@@ -12,7 +12,7 @@ This example was written and tested on the Ubuntu 22.04 GNU/Linux distribution.
 Execution of the program can be done as:
 
 ```
-./operation_planner.py satellite_name
+python ./operation_planner/main.py
 ```
 
 ## License
