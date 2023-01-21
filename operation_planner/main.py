@@ -4,6 +4,8 @@ import math
 import datetime
 import os
 import urllib.request
+from pytz import timezone
+from tabulate import tabulate
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -13,7 +15,7 @@ from googleapiclient.errors import HttpError
 
 TLE_URL = "http://celestrak.org/NORAD/elements/stations.txt"
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-_commitChanges = True
+_commitChanges = False
 _delta_week = 0
 
 def getSettings(filename: str) -> dict:
@@ -30,11 +32,11 @@ def getTLE(satList: dict) -> dict:
 
 def makeObserver(baseInfo: dict) -> ephem.Observer:
     basePos = ephem.Observer()
-    basePos.lat = "{0:3.4f}".format(baseInfo['long'])
+    basePos.lat = "{0:3.4f}".format(baseInfo['lat'])
     basePos.lon = "{0:3.4f}".format(baseInfo['long'])
     return basePos
 
-def find_pass(start_time, basePos):
+def find_pass(start_time, basePos: ephem.Observer):
     AoS = start_time
     LoS = start_time
     visible_flag = False
@@ -43,7 +45,6 @@ def find_pass(start_time, basePos):
     for i in range(24*60*60) : 
         basePos.date = start_time + datetime.timedelta(seconds=i)
         satellite.compute(basePos)
-    
         if math.degrees(satellite.alt) > 0:
             AoS = start_time + datetime.timedelta(seconds=i)
             break
@@ -74,18 +75,20 @@ def find_pass(start_time, basePos):
     return AoS, LoS, duration, max_elevation
 
 def makeEvent(satData: dict, AoS: datetime.datetime, LoS: datetime.datetime) -> dict:
+    operator = satData['operators'].pop(0)
+    satData['operators'].append(operator)
     event = {
-        'summary': satData['name'] + ' {:.1f}° '.format(max_elevation) + satData['operationTpye'],
-        'description': satData['mailDescription'],
+        'summary': satData.get('name') + ' {:.1f}° '.format(max_elevation) + satData.get('operationType'),
+        'description': satData.get('mailDescription'),
         'start': {
-            'dateTime': AoS.astimezone(datetime.timezone(name='Asia/Tokyo')).isoformat(),
+            'dateTime': AoS.astimezone(timezone('Asia/Tokyo')).isoformat(),
             'timeZone': 'Asia/Tokyo',
         },
         'end': {
-            'dateTime': LoS.astimezone(datetime.timezone(name='Asia/Tokyo')).isoformat(),
+            'dateTime': LoS.astimezone(timezone('Asia/Tokyo')).isoformat(),
             'timeZone': 'Asia/Tokyo',
         },
-        'attendees': satData['operators'],
+        'attendees': operator,
         'reminders': {
             'useDefault': False,
             'overrides': [
@@ -94,7 +97,7 @@ def makeEvent(satData: dict, AoS: datetime.datetime, LoS: datetime.datetime) -> 
             ],
         },
     }
-    return event
+    return event, operator
 
 def getGCalendarCreds(tokenLoc: str) -> Credentials:
     creds = None
@@ -109,7 +112,7 @@ def getGCalendarCreds(tokenLoc: str) -> Credentials:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                '../credentials.json', SCOPES)
+                './credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
         # Save the credentials for the next run
         with open(tokenLoc, 'w') as token:
@@ -117,21 +120,20 @@ def getGCalendarCreds(tokenLoc: str) -> Credentials:
     
     return creds
 
-def makeOutputString(opList, AoS, LoS, idx):
-    operator = opList.pop()
-    output_string = ""
-    output_string += "{:0}, ".format(idx)
-    output_string += AoS.astimezone(datetime.timezone(name='Asia/Tokyo')).strftime("%Y/%m/%d, %H:%M:%S") + ", "
-    output_string += LoS.astimezone(datetime.timezone(name='Asia/Tokyo')).strftime("%H:%M:%S") + ", "
-    output_string += str(duration) + ", "
-    output_string += "{:.2f}, ".format(max_elevation)
-    output_string += operator.get('email')
+def makeOutput(operator, AoS, LoS, duration, max_elevation, idx):
+    row = []
+    row.append(idx)
+    row.append(AoS.astimezone(timezone('Asia/Tokyo')).strftime("%Y/%m/%d, %H:%M:%S"))
+    row.append(LoS.astimezone(timezone('Asia/Tokyo')).strftime("%Y/%m/%d, %H:%M:%S"))
+    row.append(duration)
+    row.append(max_elevation)
+    row.append(operator.get('email'))
 
-    return output_string
+    return row
 
 if __name__ == "__main__":
-    settingsLoc = "../settings.json"
-    tokenLoc = "../token.json"
+    settingsLoc = "./settings.json"
+    tokenLoc = "./token.json"
     settings = dict()
     satList = dict()
     baseInfo = dict()
@@ -153,28 +155,29 @@ if __name__ == "__main__":
     begin_of_week = today - datetime.timedelta(days=today.weekday()) + datetime.timedelta(days = _delta_week * 7)
     total_duration = 7*24*60*60 # a week
 
-    current_time = datetime.datetime.combine(begin_of_week, datetime.time(hour=0,minute=0,tzinfo=datetime.timezone(name="Asia/Tokyo")))
-    LoS = current_time
-    
-    print("No., Date, AOS, LOS, Duration, Max. el., Operator")
-
     for ID, satData in satList.items():
-        tle = satData['TLE']
-        satellite = ephem.readtle(tle[0], tle[1], tle[2])
-        idx = 0
+        current_time = datetime.datetime.combine(begin_of_week, datetime.time(hour=0,minute=0,tzinfo=timezone('UTC'))) - datetime.timedelta(hours=9)
+        LoS = current_time
 
-        while (LoS - current_time).total_seconds() >= total_duration:
+        tle = satData['TLE']
+        satellite = ephem.readtle(ID, tle[0], tle[1])
+        idx = 0
+        validTimeDelta = True
+        output = []
+
+        print(satData.get("name"))
+        while validTimeDelta:
             AoS, LoS, duration, max_elevation = find_pass(LoS, basePos)
-            opList = satData['operators']
             if(max_elevation >= satData['minElevation']):
                 idx += 1
-                output = makeOutputString(opList, AoS, LoS, idx)
-                print(output)
-                event = makeEvent(satData, AoS, LoS)
+                event, operator = makeEvent(satData, AoS, LoS)
+                output.append(makeOutput(operator, AoS, LoS, duration, max_elevation, idx))
                 if _commitChanges is True:
                     try:
                         event = service.events().insert(calendarId=satData.get('calendar_id'), sendNotifications=True, body=event).execute()
                         print('Event created: %s' % (event.get('htmlLink')))
                     except HttpError as error:
                         print('An error occurred: %s' % error)
+            validTimeDelta = ((LoS - current_time).total_seconds() <= total_duration)
+        print(tabulate(output, headers=["No.","AOS", "LOS", "Duration", "Max Elevation", "Operator"]))
 
