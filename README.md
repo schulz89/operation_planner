@@ -19,9 +19,11 @@ The settings file contains the coordinates of the base station and the informati
 ### Google Calendar API
 Configure the environment and generate a valid credentials file. This can be accomplished by following the steps from: https://developers.google.com/calendar/api/quickstart/python
 
+```credentials.json``` should be place in the root repo directory.
+
 
 ## Running the Program
-To run the program, run the following command from the root project directory:
+To run the program, run the following command from the root repo directory:
 
 ```bash
 python ./operation_planner/main.py
