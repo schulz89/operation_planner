@@ -119,7 +119,7 @@ def makeEvent(satData: dict, AoS: datetime.datetime, LoS: datetime.datetime, max
             'dateTime': LoS.astimezone(timezone('Asia/Tokyo')).isoformat(),
             'timeZone': 'Asia/Tokyo',
         },
-        'attendees': operator,
+        'attendees': [operator],
         'reminders': {
             'useDefault': False,
             'overrides': [
@@ -233,11 +233,12 @@ if __name__ == "__main__":
                 if _commitChanges is True:
                     try:
                         event = service.events().insert(calendarId=satData.get('calendar_id'), sendNotifications=True, body=event).execute()
-                        print('Events created' % idx, end='\r')
+                        print('Events created: %d' % idx, end='\r')
                     except HttpError as error:
                         print('An error occurred: %s' % error)
                         exit()
             validTimeDelta = ((LoS - current_time).total_seconds() <= _total_duration)  # Set exit flag
         # Output table of passes for satellite
+        print()
         print(tabulate(output, headers=["No.","AOS", "LOS", "Duration", "Max Elevation", "Operator"]),'\n')
 
