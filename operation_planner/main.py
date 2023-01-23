@@ -13,44 +13,68 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+##################################
+# Global variables and constants
+##################################
+
 TLE_URL = "http://celestrak.org/NORAD/elements/stations.txt"
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-_commitChanges = False
+_commitChanges = True   # Flag to commit events to Google Calendar
 _delta_week = 0
+_total_duration = 604800 # a week
+
+####################
+# Methods
+####################
 
 def getSettings(filename: str) -> dict:
+    '''
+    Gets settings from settings.json.
+    '''
     with open(filename) as json_file:
         return json.load(json_file)
 
 def getTLE(satList: dict) -> dict:
+    '''
+    Gets TLE data from URL specified in TLE_URL.
+    '''
+    # Fetch TLE text file from URL
     tle_data = urllib.request.urlopen(TLE_URL).read().decode()
-    tle_data = tle_data.split('\r\n')
+    tle_data = tle_data.split('\r\n')   # Split text file by line endings
+    # Get TLE data for specified satellites only
     for i in range(0, len(tle_data), 3):
         if tle_data[i].rstrip() in satList.keys():
             satList[tle_data[i].rstrip()]['TLE'] = [tle_data[i+1].rstrip(), tle_data[i+2].rstrip()]
     return satList
 
 def makeObserver(baseInfo: dict) -> ephem.Observer:
+    '''
+    Makes a pyephem Observer for the ground station given in settings.
+    '''
     basePos = ephem.Observer()
+    # Set observer coordinates
     basePos.lat = "{0:3.4f}".format(baseInfo['lat'])
     basePos.lon = "{0:3.4f}".format(baseInfo['long'])
     return basePos
 
-def find_pass(start_time, basePos: ephem.Observer):
+def findPass(start_time: datetime.date, basePos: ephem.Observer) -> tuple[datetime.date, datetime.date, datetime.timedelta, float]:
+    '''
+    Finds the next pass from the specified start time and ground station.
+    '''
     AoS = start_time
     LoS = start_time
     visible_flag = False
     
-    #go to next AoS
-    for i in range(24*60*60) : 
+    # Go to next AoS
+    for i in range(86400) : 
         basePos.date = start_time + datetime.timedelta(seconds=i)
         satellite.compute(basePos)
         if math.degrees(satellite.alt) > 0:
             AoS = start_time + datetime.timedelta(seconds=i)
             break
     
-    #go to next LoS
-    for i in range(30*60) : 
+    # Go to next LoS
+    for i in range(1800) : 
         basePos.date = AoS + datetime.timedelta(seconds=i)
         satellite.compute(basePos)
     
@@ -63,7 +87,8 @@ def find_pass(start_time, basePos: ephem.Observer):
     
     duration = (LoS - AoS)
     
-    max_elevation = 0
+    max_elevation = 0.0
+    # Find max elevation of pass
     for i in range(int(duration.total_seconds())):
         basePos.date = AoS + datetime.timedelta(seconds=i)
         satellite.compute(basePos)
@@ -74,9 +99,15 @@ def find_pass(start_time, basePos: ephem.Observer):
     
     return AoS, LoS, duration, max_elevation
 
-def makeEvent(satData: dict, AoS: datetime.datetime, LoS: datetime.datetime) -> dict:
+def makeEvent(satData: dict, AoS: datetime.datetime, LoS: datetime.datetime, max_elevation: float) -> dict:
+    '''
+    Makes a Google Calendar event from the given info.
+    Also returns the operator for that event.
+    '''
+    # Get next operator
     operator = satData['operators'].pop(0)
     satData['operators'].append(operator)
+    # Make event dict
     event = {
         'summary': satData.get('name') + ' {:.1f}° '.format(max_elevation) + satData.get('operationType'),
         'description': satData.get('mailDescription'),
@@ -100,6 +131,9 @@ def makeEvent(satData: dict, AoS: datetime.datetime, LoS: datetime.datetime) -> 
     return event, operator
 
 def getGCalendarCreds(tokenLoc: str) -> Credentials:
+    '''
+    Gets the credetials required for Google Calendar API.
+    '''
     creds = None
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -120,7 +154,10 @@ def getGCalendarCreds(tokenLoc: str) -> Credentials:
     
     return creds
 
-def makeOutput(operator, AoS, LoS, duration, max_elevation, idx):
+def makeOutput(operator: dict, AoS: datetime.date, LoS: datetime.date, duration: datetime.timedelta, max_elevation: float, idx: int) -> list:
+    '''
+    Packages the required info into a list for table output.
+    '''
     row = []
     row.append(idx)
     row.append(AoS.astimezone(timezone('Asia/Tokyo')).strftime("%Y/%m/%d, %H:%M:%S"))
@@ -131,19 +168,31 @@ def makeOutput(operator, AoS, LoS, duration, max_elevation, idx):
 
     return row
 
+####################
+# Main Program
+####################
+
 if __name__ == "__main__":
+    # File locations
     settingsLoc = "./settings.json"
     tokenLoc = "./token.json"
+
+    # Create empty dicts
     settings = dict()
     satList = dict()
     baseInfo = dict()
 
-    #download TLE file
+    # Load settings from file
     settings = getSettings(settingsLoc)
+
+    # Load base station info and make pyephem observer
     baseInfo = settings['baseStation']
     basePos = makeObserver(baseInfo)
+
+    # Fetch TLE data and load list of satellites from settings
     satList = getTLE(settings['satellites'])
 
+    # Make Google Calendar Credentials
     try:
         creds = getGCalendarCreds(tokenLoc)
         service = build('calendar', 'v3', credentials=creds)
@@ -151,33 +200,44 @@ if __name__ == "__main__":
         print("Failed to build calendar service!\n", e)
         exit()
 
+    # Get today's date and find beginning of week
     today = datetime.date.today()
     begin_of_week = today - datetime.timedelta(days=today.weekday()) + datetime.timedelta(days = _delta_week * 7)
-    total_duration = 7*24*60*60 # a week
 
+    # Loop for each satellite in list
     for ID, satData in satList.items():
+        print(satData.get("name"))
+        idx = 0
+        output = []
+
+        # Get current time and set LoS
         current_time = datetime.datetime.combine(begin_of_week, datetime.time(hour=0,minute=0,tzinfo=timezone('UTC'))) - datetime.timedelta(hours=9)
         LoS = current_time
 
+        # Create satellite object from TLE
         tle = satData['TLE']
         satellite = ephem.readtle(ID, tle[0], tle[1])
-        idx = 0
-        validTimeDelta = True
-        output = []
 
-        print(satData.get("name"))
+        # Do while LoS - current_time is less than or equal to _total_duration
+        validTimeDelta = True
         while validTimeDelta:
-            AoS, LoS, duration, max_elevation = find_pass(LoS, basePos)
+            # Find next pass
+            AoS, LoS, duration, max_elevation = findPass(LoS, basePos)
+            # Check if max_elevation is below value for satellite minElevation
             if(max_elevation >= satData['minElevation']):
                 idx += 1
-                event, operator = makeEvent(satData, AoS, LoS)
+                # Make calendar event and output
+                event, operator = makeEvent(satData, AoS, LoS, max_elevation)
                 output.append(makeOutput(operator, AoS, LoS, duration, max_elevation, idx))
+                # Commit changes to Google Calendar
                 if _commitChanges is True:
                     try:
                         event = service.events().insert(calendarId=satData.get('calendar_id'), sendNotifications=True, body=event).execute()
-                        print('Event created: %s' % (event.get('htmlLink')))
+                        print('Events created' % idx, end='\r')
                     except HttpError as error:
                         print('An error occurred: %s' % error)
-            validTimeDelta = ((LoS - current_time).total_seconds() <= total_duration)
-        print(tabulate(output, headers=["No.","AOS", "LOS", "Duration", "Max Elevation", "Operator"]))
+                        exit()
+            validTimeDelta = ((LoS - current_time).total_seconds() <= _total_duration)  # Set exit flag
+        # Output table of passes for satellite
+        print(tabulate(output, headers=["No.","AOS", "LOS", "Duration", "Max Elevation", "Operator"]),'\n')
 
