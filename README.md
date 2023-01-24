@@ -1,20 +1,35 @@
 # Operation Planner
+![version info](https://img.shields.io/badge/Python-3.9-blue)
+![license](https://img.shields.io/github/license/schulz89/operation_planner)
 
-Example code of generating satellite pass event information using the PyEphem library and exporting to the Google Calendar API.
-This example was written and tested on the Ubuntu 22.04 GNU/Linux distribution.
+Satellite pass event information generation tool using the PyEphem library and Google Calendar API.
+
+Satellite TLE data is taken from http://celestrak.org/NORAD/elements/stations.txt
 
 ## Setup
-
-1) Configure the environment and generate a valid credentials file. This can be accomplished by following the steps from: https://developers.google.com/calendar/api/quickstart/python
-2) Create one or more google calendars and adjust the calendar ID entries in the operation_planner.py file.
-3) Adjust the satellite name and TLE download script (download_tle.sh)
-
-Execution of the program can be done as:
-
+### Install Requirments
+```bash
+pip install -r requirements.txt
 ```
-./operation_planner.py satellite_name
+
+### Settings
+Settings are stored in the ```settings.json``` file.
+The settings file contains the coordinates of the base station and the information of the satellites to track.
+
+### Google Calendar API
+Configure the environment and generate a valid credentials file. This can be accomplished by following the steps from: https://developers.google.com/calendar/api/quickstart/python
+
+```credentials.json``` should be place in the root repo directory.
+
+
+## Running the Program
+To run the program, run the following command from the root repo directory:
+
+```bash
+python ./operation_planner/main.py
 ```
 
 ## License
 
 This software is licensed under Apache License, Version 2.0
+
