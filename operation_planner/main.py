@@ -104,9 +104,6 @@ def makeEvent(satData: dict, AoS: datetime.datetime, LoS: datetime.datetime, max
     Makes a Google Calendar event from the given info.
     Also returns the operator for that event.
     '''
-    # Get next operator
-    operator = satData['operators'].pop(0)
-    satData['operators'].append(operator)
     # Make event dict
     event = {
         'summary': satData.get('name') + ' {:.1f}° '.format(max_elevation) + satData.get('operationType'),
@@ -119,7 +116,6 @@ def makeEvent(satData: dict, AoS: datetime.datetime, LoS: datetime.datetime, max
             'dateTime': LoS.astimezone(timezone('Asia/Tokyo')).isoformat(),
             'timeZone': 'Asia/Tokyo',
         },
-        'attendees': [operator],
         'reminders': {
             'useDefault': False,
             'overrides': [
@@ -128,6 +124,12 @@ def makeEvent(satData: dict, AoS: datetime.datetime, LoS: datetime.datetime, max
             ],
         },
     }
+    if len(satData['operators']) != 0:
+        # Get next operator
+        operator = satData['operators'].pop(0)
+        satData['operators'].append(operator)
+        event['attendees'] = [operator]
+        
     return event, operator
 
 def getGCalendarCreds(tokenLoc: str) -> Credentials:
