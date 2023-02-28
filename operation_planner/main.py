@@ -20,7 +20,7 @@ from googleapiclient.errors import HttpError
 
 TLE_URL = "http://celestrak.org/NORAD/elements/stations.txt"
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-_commitChanges = False   # Flag to commit events to Google Calendar
+_commitChanges = True   # Flag to commit events to Google Calendar
 _delta_week = 0
 _total_duration = 604800 # a week
 
