@@ -144,7 +144,8 @@ def makeEvent(satData: dict, op: dict, AoS: datetime.datetime, LoS: datetime.dat
         op['operators'].append(operator)
         event['attendees'] = [operator]
     except:
-        print("ERORR! Check operator list for ", op.get('operationType'))
+        operator = None
+
 
     return event, operator
 
@@ -182,7 +183,10 @@ def makeOutput(operator: dict, AoS: datetime.date, LoS: datetime.date, duration:
     row.append(LoS.astimezone(timezone('Asia/Tokyo')).strftime("%Y/%m/%d, %H:%M:%S"))
     row.append(duration)
     row.append(max_elevation)
-    row.append(operator.get('email'))
+    try:
+        row.append(operator.get('email'))
+    except:
+        row.append("None")
 
     return row
 
@@ -258,7 +262,7 @@ if __name__ == "__main__":
                 # Commit changes to Google Calendar
                 if _commitChanges is True:
                     try:
-                        event = service.events().insert(calendarId=satData.get('calendar_id'), sendNotifications=True, body=event).execute()
+                        event = service.events().insert(calendarId=op.get('calendar_id'), sendNotifications=True, body=event).execute()
                         print('Events created: %d' % idx, end='\r')
                     except HttpError as error:
                         print('An error occurred: %s' % error)
