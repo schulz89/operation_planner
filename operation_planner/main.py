@@ -2,6 +2,7 @@ import json
 import ephem
 import math
 import datetime
+import time
 import os
 import urllib.request
 from pytz import timezone
@@ -19,7 +20,7 @@ from googleapiclient.errors import HttpError
 
 TLE_URL = "http://celestrak.org/NORAD/elements/stations.txt"
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-_commitChanges = True   # Flag to commit events to Google Calendar
+_commitChanges = False   # Flag to commit events to Google Calendar
 _delta_week = 0
 _total_duration = 604800 # a week
 
@@ -34,13 +35,26 @@ def getSettings(filename: str) -> dict:
     with open(filename) as json_file:
         return json.load(json_file)
 
-def getTLE(satList: dict) -> dict:
+def getTLE(satList: dict, saveTLE: bool = False, TLElocalPath: str = "./satTLE.txt") -> dict:
     '''
     Gets TLE data from URL specified in TLE_URL.
     '''
-    # Fetch TLE text file from URL
-    tle_data = urllib.request.urlopen(TLE_URL).read().decode()
-    tle_data = tle_data.split('\r\n')   # Split text file by line endings
+    # Check for recent local version of TLE data
+    if os.path.exists(TLElocalPath) and (time.time() - os.path.getmtime(TLElocalPath))<14400:
+        print('Using local TLE data...')
+        f = open(TLElocalPath, 'r')
+        tle_data = f.read()
+        f.close()
+        tle_data = tle_data.split('\n') 
+    else:
+        print('Downloading TLE data...')
+        # Fetch TLE text file from URL
+        tle_data = urllib.request.urlopen(TLE_URL).read().decode()
+        # Save TLE data to file if specified
+        if saveTLE:
+            with open(TLElocalPath, 'w') as f:
+                f.write(tle_data)
+        tle_data = tle_data.split('\r\n')   # Split text file by line endings
     # Get TLE data for specified satellites only
     for i in range(0, len(tle_data), 3):
         if tle_data[i].rstrip() in satList.keys():
@@ -99,15 +113,15 @@ def findPass(start_time: datetime.date, basePos: ephem.Observer) -> tuple[dateti
     
     return AoS, LoS, duration, max_elevation
 
-def makeEvent(satData: dict, AoS: datetime.datetime, LoS: datetime.datetime, max_elevation: float) -> dict:
+def makeEvent(satData: dict, op: dict, AoS: datetime.datetime, LoS: datetime.datetime, max_elevation: float) -> dict:
     '''
     Makes a Google Calendar event from the given info.
     Also returns the operator for that event.
     '''
     # Make event dict
     event = {
-        'summary': satData.get('name') + ' {:.1f}° '.format(max_elevation) + satData.get('operationType'),
-        'description': satData.get('mailDescription'),
+        'summary': satData.get('name') + ' {:.1f}° '.format(max_elevation) + op.get('operationType'),
+        'description': op.get('mailDescription'),
         'start': {
             'dateTime': AoS.astimezone(timezone('Asia/Tokyo')).isoformat(),
             'timeZone': 'Asia/Tokyo',
@@ -124,12 +138,14 @@ def makeEvent(satData: dict, AoS: datetime.datetime, LoS: datetime.datetime, max
             ],
         },
     }
-    if len(satData['operators']) != 0:
+    try:
         # Get next operator
-        operator = satData['operators'].pop(0)
-        satData['operators'].append(operator)
+        operator = op['operators'].pop(0)
+        op['operators'].append(operator)
         event['attendees'] = [operator]
-        
+    except:
+        print("ERORR! Check operator list for ", op.get('operationType'))
+
     return event, operator
 
 def getGCalendarCreds(tokenLoc: str) -> Credentials:
@@ -188,11 +204,14 @@ if __name__ == "__main__":
     settings = getSettings(settingsLoc)
 
     # Load base station info and make pyephem observer
-    baseInfo = settings['baseStation']
+    baseInfo = settings.get('baseStation')
     basePos = makeObserver(baseInfo)
 
     # Fetch TLE data and load list of satellites from settings
-    satList = getTLE(settings['satellites'])
+    satList = getTLE(settings.get('satellites'), saveTLE=True)
+
+    # Get list of all operations to cosider
+    opsList = list(settings.get('operations'))
 
     # Make Google Calendar Credentials
     try:
@@ -207,8 +226,9 @@ if __name__ == "__main__":
     begin_of_week = today - datetime.timedelta(days=today.weekday()) + datetime.timedelta(days = _delta_week * 7)
 
     # Loop for each satellite in list
-    for ID, satData in satList.items():
-        print(satData.get("name"))
+    for op in opsList:
+        print(op.get("operationType"))
+        satData = satList.get(op.get('satID'))
         idx = 0
         output = []
 
@@ -217,8 +237,12 @@ if __name__ == "__main__":
         LoS = current_time
 
         # Create satellite object from TLE
-        tle = satData['TLE']
-        satellite = ephem.readtle(ID, tle[0], tle[1])
+        try:
+            tle = satData['TLE']
+        except:
+            print("No TLE data for ", satData.get('name'))
+            continue
+        satellite = ephem.readtle(op.get('satID'), tle[0], tle[1])
 
         # Do while LoS - current_time is less than or equal to _total_duration
         validTimeDelta = True
@@ -226,10 +250,10 @@ if __name__ == "__main__":
             # Find next pass
             AoS, LoS, duration, max_elevation = findPass(LoS, basePos)
             # Check if max_elevation is below value for satellite minElevation
-            if(max_elevation >= satData['minElevation']):
+            if(max_elevation >= op.get('minElevation')):
                 idx += 1
                 # Make calendar event and output
-                event, operator = makeEvent(satData, AoS, LoS, max_elevation)
+                event, operator = makeEvent(satData, op, AoS, LoS, max_elevation)
                 output.append(makeOutput(operator, AoS, LoS, duration, max_elevation, idx))
                 # Commit changes to Google Calendar
                 if _commitChanges is True:
