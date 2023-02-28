@@ -6,20 +6,43 @@
     "satellites": {
         "KITSUNE": {
             "name": "KITSUNE",
-            "shortname": "KTN",
-            "operationType": "",
+            "shortname": "KTN"
+        },
+        "1998-067UN": {
+            "name": "BIRDS5",
+            "shortname": "BD5"
+        },
+        "FUTABA": {
+            "name": "FUTABA",
+            "shortname": "FTB"
+        }
+    },
+    "operations": [
+        {
+            "operationType": "Kitsune 1",
+            "satID": "KITSUNE",
             "minElevation": 10,
-            "mailDescription": "This tracks KITSUNE.",
+            "mailDescription": "This tracks KITSUNE Operations 1.",
             "operators": [
                 {"email": "email@example.com"},
                 {"email": "email2@example.com"}
             ],
             "calendar_id": "EXAMPLE@group.calendar.google.com"
         },
-        "1998-067UN": {
-            "name": "BIRDS5",
-            "shortname": "BD5",
-            "operationType": "",
+        {
+            "operationType": "Kitsune 2",
+            "satID": "KITSUNE",
+            "minElevation": 10,
+            "mailDescription": "This tracks KITSUNE Operations 2.",
+            "operators": [
+                {"email": "email3@example.com"},
+                {"email": "email4@example.com"}
+            ],
+            "calendar_id": "EXAMPLE@group.calendar.google.com"
+        },
+        {
+            "operationType": "BIRDS-5",
+            "satID": "1998-067UN",
             "minElevation": 10,
             "mailDescription": "This tracks BIRDS-5.",
             "operators": [
@@ -28,10 +51,9 @@
             ],
             "calendar_id": "EXAMPLE@group.calendar.google.com"
         },
-        "FUTABA": {
-            "name": "FUTABA",
-            "shortname": "FTB",
-            "operationType": "",
+        {
+            "operationType": "Futaba",
+            "satID": "FUTABA",
             "minElevation": 10,
             "mailDescription": "This tracks Futaba.",
             "operators": [
@@ -40,5 +62,5 @@
             ],
             "calendar_id": "EXAMPLE@group.calendar.google.com"
         }
-    }
+    ]
 }
